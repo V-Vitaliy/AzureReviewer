@@ -6,6 +6,7 @@ from pathlib import Path
 from .documents import DEFAULT_PATTERNS
 from .errors import ReviewerError
 from .github import GitHub, publish
+from .levels import DEFAULT_LEVEL, LEVELS
 from .markdown import render
 from .models import SEVERITIES, Report
 from .pipeline import run_review
@@ -18,7 +19,7 @@ def main(argv: list[str] | None = None) -> int:
     configure_logging()
     github = github_from_env() if args.github_pr else None
     report = run_review(args.repo, args.base, args.head, args.project_id,
-                        args.doc_patterns or DEFAULT_PATTERNS, args.env_file)
+                        args.doc_patterns or DEFAULT_PATTERNS, LEVELS[args.level], args.env_file)
     exit_code = 1 if should_fail(report, args.fail_on) else 0
     if github:
         try:
@@ -38,6 +39,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--project-id", required=True)
     parser.add_argument("--doc-pattern", dest="doc_patterns", action="append",
                         help="Documentation glob; repeat to replace the defaults")
+    parser.add_argument("--level", choices=LEVELS, default=DEFAULT_LEVEL,
+                        help="Review level; selects AZURE_OPENAI_DEPLOYMENT_<LEVEL> and context limits")
     parser.add_argument("--env-file", type=Path)
     parser.add_argument("--github-pr", type=int, help="Publish the review to this pull request")
     parser.add_argument("--fail-on", choices=["none", *SEVERITIES], default="none",

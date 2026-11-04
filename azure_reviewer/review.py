@@ -6,18 +6,17 @@ from .models import Chunk, Review
 from .prompt import instructions, review_input
 
 ATTEMPTS = 2
-MAX_OUTPUT_TOKENS = 4000
 
 
-def review_changes(llm: OpenAI, deployment: str, structured: bool, changes: Changes,
-                   chunks: list[Chunk], project_instructions: str = "") -> Review:
+def review_changes(llm: OpenAI, deployment: str, structured: bool, changes: Changes, chunks: list[Chunk],
+                   max_output_tokens: int, project_instructions: str = "") -> Review:
     for attempt in range(ATTEMPTS):
         response = llm.responses.create(
             model=deployment,
             instructions=instructions(structured, project_instructions),
             input=review_input(changes, chunks, retry=attempt > 0),
             text={"format": response_format(structured)},
-            max_output_tokens=MAX_OUTPUT_TOKENS,
+            max_output_tokens=max_output_tokens,
             store=False,
         )
         if response.status != "completed":

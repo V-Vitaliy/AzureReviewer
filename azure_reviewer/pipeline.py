@@ -13,6 +13,7 @@ from .config import Settings
 from .documents import collect
 from .errors import ReviewerError
 from .git_diff import from_refs
+from .levels import Level
 from .models import Report
 from .review import review_changes
 from .search import RunSearch, search_queries
@@ -22,8 +23,8 @@ SDK_RETRIES = 2
 
 
 def run_review(repo: Path, base: str, head: str, project_id: str, doc_patterns: list[str],
-               env_file: Path | None = None) -> Report:
-    report = Report()
+               level: Level, env_file: Path | None = None) -> Report:
+    report = Report(level=level.name)
     stage = "diff"
     try:
         changes = from_refs(repo, base, head)
@@ -32,7 +33,8 @@ def run_review(repo: Path, base: str, head: str, project_id: str, doc_patterns: 
             report.status, report.summary = "empty", "No reviewable changes; Azure was not called."
             return report
         stage = "configuration"
-        settings = Settings.load(env_file)
+        settings = Settings.load(level.name, env_file)
+        report.deployment = settings.deployment
         with azure_clients(settings) as (di, search_client, llm):
             stage = "documentation"
             docs = collect(repo, changes.base, doc_patterns, di)
@@ -44,13 +46,14 @@ def run_review(repo: Path, base: str, head: str, project_id: str, doc_patterns: 
             search = RunSearch(search_client, project_id, run_id)
             with search.temporary(docs.chunks, report.warnings):
                 if docs.chunks:
-                    report.context = search.retrieve(search_queries(changes), docs.chunks)
+                    report.context = search.retrieve(search_queries(changes), docs.chunks, level.context_chars)
                     if not report.context:
                         report.warnings.append("Search found no relevant documentation.")
                 stage = "model review"
-                LOG.info("Reviewing changes with %d documentation chunks", len(report.context))
-                review = review_changes(llm, settings.deployment, settings.structured_outputs,
-                                        changes, report.context, docs.instructions)
+                LOG.info("Reviewing changes at %s level with %s and %d documentation chunks",
+                         level.name, settings.deployment, len(report.context))
+                review = review_changes(llm, settings.deployment, settings.structured_outputs, changes,
+                                        report.context, level.max_output_tokens, docs.instructions)
         report.summary, report.findings = review.summary, review.findings
     except Exception as error:
         # SDK exception messages can echo request payloads, so only our own messages are shown.

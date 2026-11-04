@@ -58,6 +58,29 @@ it is reviewed against) and added to every prompt, instead of going through sear
 It is limited to 8,000 characters and cannot override the answer format or the
 reference rules. Without the file the review works as before.
 
+## Review levels
+
+Label a PR `review:easy`, `review:medium` or `review:hard` to choose how it is
+reviewed; without a label the level is `medium`, with several the hardest wins.
+Adding a level label re-runs the review and updates the same summary comment.
+
+| Level | Deployment | Documentation context | Max output tokens |
+| --- | --- | --- | --- |
+| easy | `AZURE_OPENAI_DEPLOYMENT_EASY` | 12,000 characters | 3,000 |
+| medium | `AZURE_OPENAI_DEPLOYMENT_MEDIUM` | 16,000 characters | 4,000 |
+| hard | `AZURE_OPENAI_DEPLOYMENT_HARD` | 24,000 characters | 6,000 |
+
+Models are chosen by creating deployments in Azure AI Foundry. An unset level
+deployment falls back to `AZURE_OPENAI_DEPLOYMENT`, so one deployment is enough.
+The level and model are shown in the summary comment. Locally use `--level`.
+
+```bash
+gh label create review:easy --color 0E8A16
+gh label create review:medium --color FBCA04
+gh label create review:hard --color D93F0B
+gh variable set AZURE_OPENAI_DEPLOYMENT_HARD --body "<strong deployment>"
+```
+
 ## Using it in another repository
 
 1. Push this repository to GitHub and tag a release: `git tag v1 && git push origin v1`.
@@ -73,7 +96,7 @@ reference rules. Without the file the review works as before.
 name: Azure review
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
 permissions:
   contents: read
   pull-requests: write
@@ -82,7 +105,10 @@ concurrency:
   cancel-in-progress: false
 jobs:
   azure-review:
-    if: ${{ !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository }}
+    if: >-
+      ${{ !github.event.pull_request.draft
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && (github.event.action != 'labeled' || startsWith(github.event.label.name, 'review:')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -94,6 +120,9 @@ jobs:
         with:
           azure-openai-endpoint: ${{ vars.AZURE_OPENAI_ENDPOINT }}
           azure-openai-deployment: ${{ vars.AZURE_OPENAI_DEPLOYMENT }}
+          azure-openai-deployment-easy: ${{ vars.AZURE_OPENAI_DEPLOYMENT_EASY }}
+          azure-openai-deployment-medium: ${{ vars.AZURE_OPENAI_DEPLOYMENT_MEDIUM }}
+          azure-openai-deployment-hard: ${{ vars.AZURE_OPENAI_DEPLOYMENT_HARD }}
           azure-openai-api-key: ${{ secrets.AZURE_OPENAI_API_KEY }}
           azure-search-endpoint: ${{ vars.AZURE_SEARCH_ENDPOINT }}
           azure-search-admin-key: ${{ secrets.AZURE_SEARCH_ADMIN_KEY }}

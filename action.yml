@@ -5,8 +5,17 @@ inputs:
     description: Azure OpenAI v1 endpoint, ending in /openai/v1
     required: true
   azure-openai-deployment:
-    description: Model deployment name
+    description: Default model deployment name
     required: true
+  azure-openai-deployment-easy:
+    description: Deployment for PRs labelled review:easy (defaults to azure-openai-deployment)
+    default: ''
+  azure-openai-deployment-medium:
+    description: Deployment for PRs labelled review:medium or without a level label
+    default: ''
+  azure-openai-deployment-hard:
+    description: Deployment for PRs labelled review:hard
+    default: ''
   azure-openai-api-key:
     required: true
   azure-openai-structured-outputs:
@@ -48,6 +57,9 @@ runs:
       env:
         AZURE_OPENAI_ENDPOINT: ${{ inputs.azure-openai-endpoint }}
         AZURE_OPENAI_DEPLOYMENT: ${{ inputs.azure-openai-deployment }}
+        AZURE_OPENAI_DEPLOYMENT_EASY: ${{ inputs.azure-openai-deployment-easy }}
+        AZURE_OPENAI_DEPLOYMENT_MEDIUM: ${{ inputs.azure-openai-deployment-medium }}
+        AZURE_OPENAI_DEPLOYMENT_HARD: ${{ inputs.azure-openai-deployment-hard }}
         AZURE_OPENAI_API_KEY: ${{ inputs.azure-openai-api-key }}
         AZURE_OPENAI_STRUCTURED_OUTPUTS: ${{ inputs.azure-openai-structured-outputs }}
         AZURE_SEARCH_ENDPOINT: ${{ inputs.azure-search-endpoint }}
@@ -59,6 +71,7 @@ runs:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
+        PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         PROJECT_ID: ${{ inputs.project-id }}
         DOC_PATTERNS: ${{ inputs.doc-patterns }}
         FAIL_ON: ${{ inputs.fail-on }}
@@ -67,11 +80,15 @@ runs:
           echo "::error::Azure Reviewer runs only on pull_request events"
           exit 1
         fi
+        level=medium
+        for candidate in easy medium hard; do
+          if grep -qF "\"review:$candidate\"" <<< "$PR_LABELS"; then level=$candidate; fi
+        done
         patterns=()
         while IFS= read -r pattern; do
           if [ -n "$pattern" ]; then patterns+=(--doc-pattern "$pattern"); fi
         done <<< "$DOC_PATTERNS"
         "$RUNNER_TEMP/azure-reviewer/bin/azure-reviewer" \
           --repo "$GITHUB_WORKSPACE" --base "$BASE_SHA" --head "$HEAD_SHA" \
-          --project-id "$PROJECT_ID" --github-pr "$PR_NUMBER" --fail-on "$FAIL_ON" \
+          --project-id "$PROJECT_ID" --github-pr "$PR_NUMBER" --fail-on "$FAIL_ON" --level "$level" \
           "${patterns[@]}" | tee -a "$GITHUB_STEP_SUMMARY"

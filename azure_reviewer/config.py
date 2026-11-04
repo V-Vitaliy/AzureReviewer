@@ -33,10 +33,11 @@ class Settings(BaseModel):
     timeout: float = 60
 
     @classmethod
-    def load(cls, env_file: Path | None = None) -> "Settings":
+    def load(cls, level: str, env_file: Path | None = None) -> "Settings":
         if env_file:
             load_dotenv(env_file, override=False)
         values = {field: read(name, ALIASES.get(field)) for field, name in ENVIRONMENT.items()}
+        values["deployment"] = read(f"AZURE_OPENAI_DEPLOYMENT_{level.upper()}") or values["deployment"]
         missing = [ENVIRONMENT[field] for field, value in values.items() if not value]
         if missing:
             raise ReviewerError("Missing configuration: " + ", ".join(missing))

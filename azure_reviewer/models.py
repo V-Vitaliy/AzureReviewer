@@ -37,6 +37,8 @@ class Skipped(BaseModel):
 class Report(BaseModel):
     status: Literal["completed", "empty", "failed"] = "completed"
     summary: str = ""
+    level: str = "medium"
+    deployment: str | None = None
     base: str | None = None
     head: str | None = None
     findings: list[Finding] = Field(default_factory=list)

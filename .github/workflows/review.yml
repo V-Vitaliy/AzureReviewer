@@ -1,7 +1,7 @@
 name: Azure review
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
 permissions:
   contents: read
   pull-requests: write
@@ -11,7 +11,10 @@ concurrency:
   cancel-in-progress: false
 jobs:
   azure-review:
-    if: ${{ !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository }}
+    if: >-
+      ${{ !github.event.pull_request.draft
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && (github.event.action != 'labeled' || startsWith(github.event.label.name, 'review:')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -24,6 +27,9 @@ jobs:
         with:
           azure-openai-endpoint: ${{ vars.AZURE_OPENAI_ENDPOINT }}
           azure-openai-deployment: ${{ vars.AZURE_OPENAI_DEPLOYMENT }}
+          azure-openai-deployment-easy: ${{ vars.AZURE_OPENAI_DEPLOYMENT_EASY }}
+          azure-openai-deployment-medium: ${{ vars.AZURE_OPENAI_DEPLOYMENT_MEDIUM }}
+          azure-openai-deployment-hard: ${{ vars.AZURE_OPENAI_DEPLOYMENT_HARD }}
           azure-openai-api-key: ${{ secrets.AZURE_OPENAI_API_KEY }}
           azure-search-endpoint: ${{ vars.AZURE_SEARCH_ENDPOINT }}
           azure-search-admin-key: ${{ secrets.AZURE_SEARCH_ADMIN_KEY }}

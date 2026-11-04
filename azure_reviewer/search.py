@@ -14,7 +14,6 @@ READY_ATTEMPTS = 5
 MAX_QUERIES = 6
 TERMS_PER_QUERY = 10
 HITS_PER_QUERY = 4
-MAX_CONTEXT_CHARS = 16_000
 
 
 class RunSearch:
@@ -67,7 +66,7 @@ class RunSearch:
             if not deleted:
                 warnings.append("Search cleanup failed; temporary documents may remain.")
 
-    def retrieve(self, queries: list[str], chunks: list[Chunk], limit: int = MAX_CONTEXT_CHARS) -> list[Chunk]:
+    def retrieve(self, queries: list[str], chunks: list[Chunk], limit: int) -> list[Chunk]:
         by_id = {chunk.id: chunk for chunk in chunks}
         selected: list[Chunk] = []
         seen: set[str] = set()

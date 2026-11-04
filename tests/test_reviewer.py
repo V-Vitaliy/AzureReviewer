@@ -12,6 +12,7 @@ from azure_reviewer.documents import collect, matches, split_text
 from azure_reviewer.errors import ReviewerError
 from azure_reviewer.git_diff import from_refs, parse_diff
 from azure_reviewer.github import SUMMARY_MARKER, fingerprint, publish
+from azure_reviewer.levels import LEVELS
 from azure_reviewer.markdown import escape, render
 from azure_reviewer.models import Chunk, Finding, Report
 from azure_reviewer.pipeline import run_review
@@ -165,7 +166,7 @@ class SearchTests(unittest.TestCase):
         self.client.search.return_value = Results([{"id": "abc"}, {"id": "abc"}])
         search = RunSearch(self.client, "a'b", "run'1")
         with search.temporary([self.chunk], []):
-            result = search.retrieve(search_queries(parse_diff(PATCH)), [self.chunk])
+            result = search.retrieve(search_queries(parse_diff(PATCH)), [self.chunk], 100)
         self.assertEqual(result, [self.chunk])
         for call in self.client.search.call_args_list:
             self.assertEqual(call.kwargs["filter"], "project_id eq 'a''b' and run_id eq 'run''1'")
@@ -217,7 +218,7 @@ class ReviewTests(unittest.TestCase):
         llm = MagicMock()
         llm.responses.create.return_value = NS(status="completed", output_text="bad")
         with self.assertRaisesRegex(ReviewerError, "2 times"):
-            review_changes(llm, "deployment", False, parse_diff(PATCH), [])
+            review_changes(llm, "deployment", False, parse_diff(PATCH), [], 4000)
         self.assertEqual(llm.responses.create.call_count, 2)
         self.assertIn("rejected", llm.responses.create.call_args.kwargs["input"])
 
@@ -238,6 +239,11 @@ class OutputTests(unittest.TestCase):
         self.assertNotIn("[click](", text)
         self.assertIn("**high** client\\.py:2", text)
         self.assertEqual(escape("<b>"), "&lt;b&gt;")
+
+    def test_level_and_model_in_summary(self):
+        text = render(Report(level="hard", deployment="gpt-4.1"))
+        self.assertIn("**Level:** hard", text)
+        self.assertIn("**Model:** gpt\\-4\\.1", text)
 
     def test_gate(self):
         medium = Report(findings=[finding(severity="medium")])
@@ -268,6 +274,18 @@ class OutputTests(unittest.TestCase):
         self.assertIn("HTTP 422", body["body"])
 
 
+class SettingsTests(unittest.TestCase):
+    ENVIRONMENT = {"AZURE_OPENAI_ENDPOINT": "https://example.com/openai/v1", "AZURE_OPENAI_API_KEY": "k",
+                   "AZURE_OPENAI_DEPLOYMENT": "default-model", "AZURE_SEARCH_ENDPOINT": "https://example.com",
+                   "AZURE_SEARCH_ADMIN_KEY": "k", "AZURE_DI_ENDPOINT": "https://example.com",
+                   "AZURE_DI_API_KEY": "k"}
+
+    def test_level_deployment_falls_back_to_default(self):
+        with patch.dict("os.environ", {**self.ENVIRONMENT, "AZURE_OPENAI_DEPLOYMENT_HARD": "strong-model"}, clear=True):
+            self.assertEqual(Settings.load("hard").deployment, "strong-model")
+            self.assertEqual(Settings.load("easy").deployment, "default-model")
+
+
 class PipelineTests(unittest.TestCase):
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory()
@@ -282,7 +300,7 @@ class PipelineTests(unittest.TestCase):
 
     def test_empty_change_needs_no_configuration(self):
         with patch("azure_reviewer.pipeline.Settings.load") as load:
-            report = run_review(self.repo.root, "main", "feature", "p", ["README.md"])
+            report = run_review(self.repo.root, "main", "feature", "p", ["README.md"], LEVELS["medium"])
         self.assertEqual(report.status, "empty")
         load.assert_not_called()
 
@@ -299,14 +317,16 @@ class PipelineTests(unittest.TestCase):
             llm = openai.return_value.__enter__.return_value
             llm.responses.create.return_value = NS(status="completed",
                                                    output_text='{"summary":"Reviewed","findings":[]}')
-            report = run_review(self.repo.root, "main", "feature", "p", ["README.md"])
+            report = run_review(self.repo.root, "main", "feature", "p", ["README.md"], LEVELS["medium"])
             self.assertEqual((report.status, report.summary), ("completed", "Reviewed"))
             self.assertIn("Use explicit timeouts", llm.responses.create.call_args.kwargs["instructions"])
+            self.assertEqual(llm.responses.create.call_args.kwargs["max_output_tokens"], 4000)
+            self.assertEqual(report.deployment, "demo")
             search_client.delete_documents.assert_called_once()
 
             llm.responses.create.side_effect = ValueError("sensitive SDK payload")
             with self.assertLogs("azure_reviewer.pipeline", level="ERROR"):
-                report = run_review(self.repo.root, "main", "feature", "p", ["README.md"])
+                report = run_review(self.repo.root, "main", "feature", "p", ["README.md"], LEVELS["medium"])
             self.assertEqual(report.status, "failed")
             self.assertNotIn("sensitive", report.summary)
             self.assertEqual(search_client.delete_documents.call_count, 2)

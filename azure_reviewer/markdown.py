@@ -12,9 +12,12 @@ def escape(text: str) -> str:
 
 
 def render(report: Report) -> str:
-    rows = ["## Azure code review", "", f"**Status:** {report.status}"]
+    details = [f"**Status:** {report.status}", f"**Level:** {report.level}"]
+    if report.deployment:
+        details.append(f"**Model:** {escape(report.deployment)}")
     if report.head:
-        rows[-1] += f" · commit `{report.head[:12]}`"
+        details.append(f"**Commit:** `{report.head[:12]}`")
+    rows = ["## Azure code review", "", " · ".join(details)]
     rows += ["", escape(report.summary), "", "### Findings", ""]
     rows += [f"- **{f.severity}** {escape(location(f))}: {escape(f.explanation)} "
              f"*Suggestion:* {escape(f.suggestion)}" for f in report.findings]
