@@ -11,6 +11,8 @@ from .models import Chunk, Skipped
 from .pdf import Page, extract_pdf
 
 DEFAULT_PATTERNS = ["README.md", "docs/**/*.md", "docs/**/*.pdf"]
+INSTRUCTIONS_PATH = "docs/review_instructions.md"
+MAX_INSTRUCTIONS_CHARS = 8000
 CHUNK_SIZE = 1800
 MAX_CHUNKS = 300
 MAX_FILE_BYTES = 4 * 1024 * 1024
@@ -23,6 +25,7 @@ class Documentation:
     chunks: list[Chunk] = field(default_factory=list)
     skipped: list[Skipped] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    instructions: str = ""
 
     def skip(self, path: str, reason: str) -> None:
         self.skipped.append(Skipped(path=path, reason=reason))
@@ -33,6 +36,9 @@ def collect(repo: Path, commit: str, patterns: list[str], di: DocumentIntelligen
     docs = Documentation()
     total = 0
     for path, mode, oid in tracked_files(repo, commit):
+        if path == INSTRUCTIONS_PATH:
+            read_instructions(repo, mode, oid, docs)
+            continue
         if not matches(path, patterns):
             continue
         suffix = PurePosixPath(path).suffix.lower()
@@ -72,6 +78,17 @@ def tracked_files(repo: Path, commit: str) -> list[tuple[str, str, str]]:
             mode, _, oid = metadata.decode().split()
             files.append((name.decode("utf-8", errors="replace"), mode, oid))
     return sorted(files)
+
+
+def read_instructions(repo: Path, mode: str, oid: str, docs: Documentation) -> None:
+    if mode not in REGULAR_FILE_MODES:
+        docs.skip(INSTRUCTIONS_PATH, "Not a regular file")
+        return
+    text = git(repo, "cat-file", "blob", oid).decode("utf-8", errors="replace").strip()
+    if len(text) > MAX_INSTRUCTIONS_CHARS:
+        docs.skip(INSTRUCTIONS_PATH, f"Review instructions exceed {MAX_INSTRUCTIONS_CHARS} characters")
+        return
+    docs.instructions = text
 
 
 def matches(path: str, patterns: list[str]) -> bool:

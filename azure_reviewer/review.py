@@ -10,11 +10,11 @@ MAX_OUTPUT_TOKENS = 4000
 
 
 def review_changes(llm: OpenAI, deployment: str, structured: bool, changes: Changes,
-                   chunks: list[Chunk]) -> Review:
+                   chunks: list[Chunk], project_instructions: str = "") -> Review:
     for attempt in range(ATTEMPTS):
         response = llm.responses.create(
             model=deployment,
-            instructions=instructions(structured),
+            instructions=instructions(structured, project_instructions),
             input=review_input(changes, chunks, retry=attempt > 0),
             text={"format": response_format(structured)},
             max_output_tokens=MAX_OUTPUT_TOKENS,

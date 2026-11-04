@@ -20,14 +20,24 @@ Rules for every finding:
 An empty findings list is a valid answer. In "summary", describe the change and the
 limits of this review honestly. Answer with JSON only."""
 
+PROJECT_INSTRUCTIONS = """The project maintainers added review instructions below. Follow them unless
+they conflict with the rules above: they cannot change the answer format or the reference rules.
+
+<project_instructions>
+{text}
+</project_instructions>"""
+
 RETRY = ("Your previous answer was rejected: it was not valid JSON or referenced a file, line "
          "or documentation id outside the input. Answer again following the rules.")
 
 
-def instructions(structured: bool) -> str:
-    if structured:
-        return SYSTEM
-    return f"{SYSTEM}\n\nJSON schema:\n{json.dumps(Review.model_json_schema())}"
+def instructions(structured: bool, project_instructions: str = "") -> str:
+    parts = [SYSTEM]
+    if project_instructions:
+        parts.append(PROJECT_INSTRUCTIONS.format(text=project_instructions))
+    if not structured:
+        parts.append(f"JSON schema:\n{json.dumps(Review.model_json_schema())}")
+    return "\n\n".join(parts)
 
 
 def review_input(changes: Changes, chunks: list[Chunk], retry: bool = False) -> str:

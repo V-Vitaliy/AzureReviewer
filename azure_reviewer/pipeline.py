@@ -50,7 +50,7 @@ def run_review(repo: Path, base: str, head: str, project_id: str, doc_patterns: 
                 stage = "model review"
                 LOG.info("Reviewing changes with %d documentation chunks", len(report.context))
                 review = review_changes(llm, settings.deployment, settings.structured_outputs,
-                                        changes, report.context)
+                                        changes, report.context, docs.instructions)
         report.summary, report.findings = review.summary, review.findings
     except Exception as error:
         # SDK exception messages can echo request payloads, so only our own messages are shown.

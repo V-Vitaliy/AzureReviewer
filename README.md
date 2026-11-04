@@ -41,6 +41,23 @@ git merge-base(base, head) ──► diff ────────────�
 `pipeline.py` wires the steps together; `cli.py` parses arguments and applies the
 `--fail-on` gate.
 
+## Review instructions
+
+Put project-specific review rules in `docs/review_instructions.md`, for example:
+
+```markdown
+# Review instructions
+- Python 3.12, FastAPI, everything is async.
+- Every HTTP request needs an explicit timeout.
+- Do not comment on missing tests or docstrings.
+- Write findings in Russian.
+```
+
+The file is read in full from the merge-base commit (a PR cannot change the rules
+it is reviewed against) and added to every prompt, instead of going through search.
+It is limited to 8,000 characters and cannot override the answer format or the
+reference rules. Without the file the review works as before.
+
 ## Using it in another repository
 
 1. Push this repository to GitHub and tag a release: `git tag v1 && git push origin v1`.
