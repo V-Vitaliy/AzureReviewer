@@ -1,0 +1,6 @@
+**
+!pyproject.toml
+!azure_reviewer/
+!azure_reviewer/*.py
+**/__pycache__/
+**/*.py[cod]

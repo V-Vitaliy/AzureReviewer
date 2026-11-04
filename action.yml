@@ -1,0 +1,77 @@
+name: Azure Reviewer
+description: Documentation-aware pull request review with Azure OpenAI
+inputs:
+  azure-openai-endpoint:
+    description: Azure OpenAI v1 endpoint, ending in /openai/v1
+    required: true
+  azure-openai-deployment:
+    description: Model deployment name
+    required: true
+  azure-openai-api-key:
+    required: true
+  azure-openai-structured-outputs:
+    description: Use strict JSON schema output (false switches to JSON mode)
+    default: 'true'
+  azure-search-endpoint:
+    required: true
+  azure-search-admin-key:
+    required: true
+  azure-search-index:
+    default: project-docs
+  azure-di-endpoint:
+    required: true
+  azure-di-api-key:
+    required: true
+  doc-patterns:
+    description: Documentation globs, one per line (default README.md, docs/**/*.md, docs/**/*.pdf)
+    default: ''
+  fail-on:
+    description: Fail the check on findings of this severity or higher (none, low, medium, high, critical)
+    default: high
+  project-id:
+    default: ${{ github.repository }}
+  github-token:
+    default: ${{ github.token }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Install reviewer
+      shell: bash
+      run: |
+        python -m venv "$RUNNER_TEMP/azure-reviewer"
+        "$RUNNER_TEMP/azure-reviewer/bin/pip" install --quiet "$GITHUB_ACTION_PATH"
+    - name: Review pull request
+      shell: bash
+      env:
+        AZURE_OPENAI_ENDPOINT: ${{ inputs.azure-openai-endpoint }}
+        AZURE_OPENAI_DEPLOYMENT: ${{ inputs.azure-openai-deployment }}
+        AZURE_OPENAI_API_KEY: ${{ inputs.azure-openai-api-key }}
+        AZURE_OPENAI_STRUCTURED_OUTPUTS: ${{ inputs.azure-openai-structured-outputs }}
+        AZURE_SEARCH_ENDPOINT: ${{ inputs.azure-search-endpoint }}
+        AZURE_SEARCH_ADMIN_KEY: ${{ inputs.azure-search-admin-key }}
+        AZURE_SEARCH_INDEX: ${{ inputs.azure-search-index }}
+        AZURE_DI_ENDPOINT: ${{ inputs.azure-di-endpoint }}
+        AZURE_DI_API_KEY: ${{ inputs.azure-di-api-key }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        PROJECT_ID: ${{ inputs.project-id }}
+        DOC_PATTERNS: ${{ inputs.doc-patterns }}
+        FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        if [ -z "$PR_NUMBER" ]; then
+          echo "::error::Azure Reviewer runs only on pull_request events"
+          exit 1
+        fi
+        patterns=()
+        while IFS= read -r pattern; do
+          if [ -n "$pattern" ]; then patterns+=(--doc-pattern "$pattern"); fi
+        done <<< "$DOC_PATTERNS"
+        "$RUNNER_TEMP/azure-reviewer/bin/azure-reviewer" \
+          --repo "$GITHUB_WORKSPACE" --base "$BASE_SHA" --head "$HEAD_SHA" \
+          --project-id "$PROJECT_ID" --github-pr "$PR_NUMBER" --fail-on "$FAIL_ON" \
+          "${patterns[@]}" | tee -a "$GITHUB_STEP_SUMMARY"

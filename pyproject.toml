@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "azure-reviewer"
+version = "0.1.0"
+description = "A small documentation-aware Azure code reviewer"
+requires-python = ">=3.11"
+dependencies = [
+  "azure-ai-documentintelligence>=1.0.2,<2",
+  "azure-search-documents>=11.6,<13",
+  "openai>=1.68,<4",
+  "pydantic>=2.8,<3",
+  "python-dotenv>=1.0,<2",
+  "pypdf>=5,<7",
+]
+
+[project.scripts]
+azure-reviewer = "azure_reviewer.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["azure_reviewer*"]

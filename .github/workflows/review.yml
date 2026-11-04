@@ -1,0 +1,32 @@
+name: Azure review
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+  pull-requests: write
+concurrency:
+  group: azure-review-${{ github.event.pull_request.number }}
+  # Cancelling a run could skip the cleanup of temporary Search documents.
+  cancel-in-progress: false
+jobs:
+  azure-review:
+    if: ${{ !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Other repositories use V-Vitaliy/AzureReviewer@v1 here.
+      - uses: ./
+        with:
+          azure-openai-endpoint: ${{ vars.AZURE_OPENAI_ENDPOINT }}
+          azure-openai-deployment: ${{ vars.AZURE_OPENAI_DEPLOYMENT }}
+          azure-openai-api-key: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          azure-search-endpoint: ${{ vars.AZURE_SEARCH_ENDPOINT }}
+          azure-search-admin-key: ${{ secrets.AZURE_SEARCH_ADMIN_KEY }}
+          azure-di-endpoint: ${{ vars.AZURE_DI_ENDPOINT }}
+          azure-di-api-key: ${{ secrets.AZURE_DI_API_KEY }}
+          fail-on: high
