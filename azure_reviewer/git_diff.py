@@ -35,12 +35,12 @@ def git(repo: Path, *args: str) -> bytes:
     return result.stdout
 
 
-def from_refs(repo: Path, base: str, head: str) -> Changes:
+def from_refs(repo: Path, base: str, head: str, limit: int = MAX_DIFF_CHARS) -> Changes:
     base_sha, head_sha = revision(repo, base), revision(repo, head)
     ancestor = git(repo, "merge-base", base_sha, head_sha).decode().strip()
     patch = git(repo, "-c", "core.quotePath=true", "diff", "--no-ext-diff", "--no-textconv",
                 "--no-renames", "--unified=3", ancestor, head_sha, "--")
-    changes = parse_diff(patch.decode("utf-8", errors="replace"))
+    changes = parse_diff(patch.decode("utf-8", errors="replace"), limit)
     changes.base, changes.head = ancestor, head_sha
     return changes
 

@@ -19,8 +19,8 @@ git merge-base(base, head) ──► diff ────────────�
 ```
 
 1. **Diff** (`git_diff.py`): `git diff merge-base..head`, the same diff GitHub shows.
-   Binary, lock, generated, vendor and `.env*` files are skipped. Diffs over
-   60,000 characters fail instead of being truncated.
+   Binary, lock, generated, vendor and `.env*` files are skipped. Diffs over the
+   level's limit (see [Review levels](#review-levels)) fail instead of being truncated.
 2. **Documentation** (`documents.py`, `pdf.py`): `README.md`, `docs/**/*.md` and
    `docs/**/*.pdf`, read from the merge-base commit, so a PR cannot rewrite the
    rules it is reviewed against. PDFs go through Document Intelligence
@@ -64,11 +64,11 @@ Label a PR `review:easy`, `review:medium` or `review:hard` to choose how it is
 reviewed; without a label the level is `medium`, with several the hardest wins.
 Adding a level label re-runs the review and updates the same summary comment.
 
-| Level | Deployment | Documentation context | Max output tokens |
-| --- | --- | --- | --- |
-| easy | `AZURE_OPENAI_DEPLOYMENT_EASY` | 12,000 characters | 3,000 |
-| medium | `AZURE_OPENAI_DEPLOYMENT_MEDIUM` | 16,000 characters | 4,000 |
-| hard | `AZURE_OPENAI_DEPLOYMENT_HARD` | 24,000 characters | 6,000 |
+| Level | Deployment | Documentation context | Max output tokens | Max diff |
+| --- | --- | --- | --- | --- |
+| easy | `AZURE_OPENAI_DEPLOYMENT_EASY` | 12,000 characters | 3,000 | 60,000 characters |
+| medium | `AZURE_OPENAI_DEPLOYMENT_MEDIUM` | 16,000 characters | 4,000 | 60,000 characters |
+| hard | `AZURE_OPENAI_DEPLOYMENT_HARD` | 24,000 characters | 6,000 | 120,000 characters |
 
 Models are chosen by creating deployments in Azure AI Foundry. An unset level
 deployment falls back to `AZURE_OPENAI_DEPLOYMENT`, so one deployment is enough.

@@ -331,6 +331,16 @@ class PipelineTests(unittest.TestCase):
             self.assertNotIn("sensitive", report.summary)
             self.assertEqual(search_client.delete_documents.call_count, 2)
 
+    def test_diff_limit_depends_on_level(self):
+        self.repo.commit({"client.py": "a\n" + "x = 1\n" * 11_000}, "large change")
+        stop = ReviewerError("configuration reached")
+        with patch("azure_reviewer.pipeline.Settings.load", side_effect=stop), self.assertLogs(level="ERROR"):
+            medium = run_review(self.repo.root, "main", "feature", "p", ["README.md"], LEVELS["medium"])
+            hard = run_review(self.repo.root, "main", "feature", "p", ["README.md"], LEVELS["hard"])
+        self.assertIn("during diff: Reviewable diff exceeds 60000 characters", medium.summary)
+        self.assertEqual(hard.summary, "Review failed during configuration: configuration reached")
+        self.assertGreater(LEVELS["hard"].max_diff_chars, LEVELS["medium"].max_diff_chars)
+
     def test_cli_prints_markdown(self):
         with patch("builtins.print") as printed:
             code = main(["--repo", str(self.repo.root), "--base", "main", "--head", "feature", "--project-id", "p"])

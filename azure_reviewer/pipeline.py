@@ -27,7 +27,7 @@ def run_review(repo: Path, base: str, head: str, project_id: str, doc_patterns: 
     report = Report(level=level.name)
     stage = "diff"
     try:
-        changes = from_refs(repo, base, head)
+        changes = from_refs(repo, base, head, level.max_diff_chars)
         report.base, report.head, report.skipped = changes.base, changes.head, changes.skipped
         if not changes.text.strip():
             report.status, report.summary = "empty", "No reviewable changes; Azure was not called."
