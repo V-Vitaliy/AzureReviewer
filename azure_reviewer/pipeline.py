@@ -10,7 +10,7 @@ from azure.search.documents import SearchClient
 from openai import OpenAI
 
 from .config import Settings
-from .documents import collect
+from .documents import collect, instructions_path
 from .errors import ReviewerError
 from .git_diff import from_refs
 from .levels import Level
@@ -23,7 +23,8 @@ SDK_RETRIES = 2
 
 
 def run_review(repo: Path, base: str, head: str, project_id: str, doc_patterns: list[str],
-               level: Level, env_file: Path | None = None) -> Report:
+               level: Level, env_file: Path | None = None,
+               instructions: str = instructions_path()) -> Report:
     report = Report(level=level.name)
     stage = "diff"
     try:
@@ -37,7 +38,7 @@ def run_review(repo: Path, base: str, head: str, project_id: str, doc_patterns: 
         report.deployment = settings.deployment
         with azure_clients(settings) as (di, search_client, llm):
             stage = "documentation"
-            docs = collect(repo, changes.base, doc_patterns, di)
+            docs = collect(repo, changes.base, doc_patterns, di, instructions)
             report.skipped += docs.skipped
             report.warnings += docs.warnings
             stage = "search"

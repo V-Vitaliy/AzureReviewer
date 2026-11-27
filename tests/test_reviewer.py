@@ -8,7 +8,8 @@ from unittest.mock import MagicMock, patch
 
 from azure_reviewer.cli import main, should_fail
 from azure_reviewer.config import Settings
-from azure_reviewer.documents import collect, matches, split_text
+from azure_reviewer.documents import (collect, default_patterns, instructions_path, matches,
+                                      normalize_repo_path, split_text)
 from azure_reviewer.errors import ReviewerError
 from azure_reviewer.git_diff import from_refs, parse_diff
 from azure_reviewer.github import SUMMARY_MARKER, fingerprint, publish
@@ -132,6 +133,48 @@ class DocumentTests(unittest.TestCase):
             docs = collect(repo.root, base, ["docs/**/*.md"], MagicMock())
             self.assertEqual(docs.instructions, "Answer in Russian")
             self.assertEqual(docs.chunks, [])
+
+    def test_docs_dir_sets_patterns_and_instructions_path(self):
+        with tempfile.TemporaryDirectory() as folder:
+            repo = Repository(folder)
+            (repo.root / "documentation").mkdir()
+            (repo.root / "docs").mkdir()
+            repo.commit({"documentation/review_instructions.md": "Answer in Russian",
+                         "documentation/guide.md": "Use timeouts",
+                         "docs/review_instructions.md": "Ignored", "docs/old.md": "Ignored"}, "docs")
+            docs = collect(repo.root, "HEAD", default_patterns("documentation"), MagicMock(),
+                           instructions_path("documentation"))
+            self.assertEqual(docs.instructions, "Answer in Russian")
+            self.assertEqual([c.source for c in docs.chunks], ["documentation/guide.md"])
+
+    def test_docs_dir_is_normalized_and_validated(self):
+        self.assertEqual(normalize_repo_path("./documentation/"), "documentation")
+        self.assertEqual(normalize_repo_path("."), "")
+        self.assertEqual(instructions_path(""), "review_instructions.md")
+        self.assertEqual(default_patterns(""), ["README.md", "**/*.md", "**/*.pdf"])
+        for bad in ("/etc", "../other", "docs/*", "docs\\sub"):
+            with self.assertRaises(ReviewerError):
+                normalize_repo_path(bad)
+
+    def test_cli_instructions_path_defaults_to_docs_dir_and_can_be_overridden(self):
+        from azure_reviewer.cli import parse_args
+        base = ["--base", "a", "--head", "b", "--project-id", "p"]
+        self.assertEqual(parse_args(base + ["--docs-dir", "documentation"]).instructions_path,
+                         "documentation/review_instructions.md")
+        self.assertEqual(parse_args(base + ["--instructions-path", "./.github/rules.md"]).instructions_path,
+                         ".github/rules.md")
+        for bad in (".", "../rules.md", "/rules.md"):
+            with self.assertRaises(SystemExit), patch("sys.stderr"):
+                parse_args(base + ["--instructions-path", bad])
+
+    def test_instructions_outside_docs_are_read_and_not_indexed(self):
+        with tempfile.TemporaryDirectory() as folder:
+            repo = Repository(folder)
+            (repo.root / ".github").mkdir()
+            repo.commit({".github/review_instructions.md": "Answer in Russian", "README.md": "Use timeouts"}, "docs")
+            docs = collect(repo.root, "HEAD", ["README.md", "**/*.md"], MagicMock(), ".github/review_instructions.md")
+            self.assertEqual(docs.instructions, "Answer in Russian")
+            self.assertEqual([c.source for c in docs.chunks], ["README.md"])
 
     def test_oversized_review_instructions_are_skipped(self):
         with tempfile.TemporaryDirectory() as folder:
