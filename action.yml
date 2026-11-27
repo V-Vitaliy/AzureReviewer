@@ -31,8 +31,14 @@ inputs:
     required: true
   azure-di-api-key:
     required: true
+  docs-dir:
+    description: Documentation directory relative to the repository root ('.' for the root); holds review_instructions.md
+    default: docs
+  instructions-path:
+    description: Review instructions file relative to the repository root (default <docs-dir>/review_instructions.md)
+    default: ''
   doc-patterns:
-    description: Documentation globs, one per line (default README.md, docs/**/*.md, docs/**/*.pdf)
+    description: Documentation globs, one per line (default README.md, <docs-dir>/**/*.md, <docs-dir>/**/*.pdf)
     default: ''
   fail-on:
     description: Fail the check on findings of this severity or higher (none, low, medium, high, critical)
@@ -73,6 +79,8 @@ runs:
         PR_NUMBER: ${{ github.event.pull_request.number }}
         PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         PROJECT_ID: ${{ inputs.project-id }}
+        DOCS_DIR: ${{ inputs.docs-dir }}
+        INSTRUCTIONS_PATH: ${{ inputs.instructions-path }}
         DOC_PATTERNS: ${{ inputs.doc-patterns }}
         FAIL_ON: ${{ inputs.fail-on }}
       run: |
@@ -84,11 +92,12 @@ runs:
         for candidate in easy medium hard; do
           if grep -qF "\"review:$candidate\"" <<< "$PR_LABELS"; then level=$candidate; fi
         done
-        patterns=()
+        options=()
+        if [ -n "$INSTRUCTIONS_PATH" ]; then options+=(--instructions-path "$INSTRUCTIONS_PATH"); fi
         while IFS= read -r pattern; do
-          if [ -n "$pattern" ]; then patterns+=(--doc-pattern "$pattern"); fi
+          if [ -n "$pattern" ]; then options+=(--doc-pattern "$pattern"); fi
         done <<< "$DOC_PATTERNS"
         "$RUNNER_TEMP/azure-reviewer/bin/azure-reviewer" \
           --repo "$GITHUB_WORKSPACE" --base "$BASE_SHA" --head "$HEAD_SHA" \
           --project-id "$PROJECT_ID" --github-pr "$PR_NUMBER" --fail-on "$FAIL_ON" --level "$level" \
-          "${patterns[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
+          --docs-dir "$DOCS_DIR" "${options[@]}" | tee -a "$GITHUB_STEP_SUMMARY"

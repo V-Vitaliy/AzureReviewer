@@ -22,7 +22,8 @@ git merge-base(base, head) ──► diff ────────────�
    Binary, lock, generated, vendor and `.env*` files are skipped. Diffs over the
    level's limit (see [Review levels](#review-levels)) fail instead of being truncated.
 2. **Documentation** (`documents.py`, `pdf.py`): `README.md`, `docs/**/*.md` and
-   `docs/**/*.pdf`, read from the merge-base commit, so a PR cannot rewrite the
+   `docs/**/*.pdf` (the folder is set by `--docs-dir`, the globs by `--doc-pattern`),
+   read from the merge-base commit, so a PR cannot rewrite the
    rules it is reviewed against. PDFs go through Document Intelligence
    (`prebuilt-layout`, first two pages on F0). Text is split into ≤1,800-character chunks.
 3. **Retrieval** (`search.py`): chunks are uploaded to an existing Azure AI Search
@@ -43,7 +44,10 @@ git merge-base(base, head) ──► diff ────────────�
 
 ## Review instructions
 
-Put project-specific review rules in `docs/review_instructions.md`, for example:
+Put project-specific review rules in `docs/review_instructions.md` (or
+`<docs-dir>/review_instructions.md` when `--docs-dir` / the `docs-dir` input is set).
+Another location, such as `.github/review_instructions.md`, is set with
+`--instructions-path` / the `instructions-path` input. For example:
 
 ```markdown
 # Review instructions
@@ -136,7 +140,9 @@ jobs:
 
 Optional inputs: `azure-search-index` (default `project-docs`),
 `azure-openai-structured-outputs` (`false` for deployments without JSON schema
-support), `doc-patterns` (one glob per line), `fail-on` (`none`…`critical`),
+support), `docs-dir` (documentation folder, default `docs`; `.` for the repository
+root), `instructions-path` (review instructions file, default
+`<docs-dir>/review_instructions.md`), `doc-patterns` (one glob per line, replaces the defaults), `fail-on` (`none`…`critical`),
 `project-id`.
 
 Notes:

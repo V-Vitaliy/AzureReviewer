@@ -10,8 +10,8 @@ from .git_diff import EXCLUDED_DIRS, git
 from .models import Chunk, Skipped
 from .pdf import Page, extract_pdf
 
-DEFAULT_PATTERNS = ["README.md", "docs/**/*.md", "docs/**/*.pdf"]
-INSTRUCTIONS_PATH = "docs/review_instructions.md"
+DEFAULT_DOCS_DIR = "docs"
+INSTRUCTIONS_FILE = "review_instructions.md"
 MAX_INSTRUCTIONS_CHARS = 8000
 CHUNK_SIZE = 1800
 MAX_CHUNKS = 300
@@ -31,13 +31,34 @@ class Documentation:
         self.skipped.append(Skipped(path=path, reason=reason))
 
 
-def collect(repo: Path, commit: str, patterns: list[str], di: DocumentIntelligenceClient) -> Documentation:
+def normalize_repo_path(value: str) -> str:
+    """Return a repository-relative POSIX path, "" for the repository root."""
+    text = value.strip()
+    if "\\" in text or any(c in text for c in "*?[]"):
+        raise ReviewerError("must be a plain POSIX path without globs")
+    path = PurePosixPath(text or ".")
+    if path.is_absolute() or ".." in path.parts:
+        raise ReviewerError("must be relative to the repository root")
+    return "" if str(path) == "." else str(path)
+
+
+def default_patterns(docs_dir: str = DEFAULT_DOCS_DIR) -> list[str]:
+    prefix = f"{docs_dir}/" if docs_dir else ""
+    return ["README.md", f"{prefix}**/*.md", f"{prefix}**/*.pdf"]
+
+
+def instructions_path(docs_dir: str = DEFAULT_DOCS_DIR) -> str:
+    return f"{docs_dir}/{INSTRUCTIONS_FILE}" if docs_dir else INSTRUCTIONS_FILE
+
+
+def collect(repo: Path, commit: str, patterns: list[str], di: DocumentIntelligenceClient,
+            instructions: str = instructions_path()) -> Documentation:
     """Read documentation from a commit's Git objects, without touching the working tree."""
     docs = Documentation()
     total = 0
     for path, mode, oid in tracked_files(repo, commit):
-        if path == INSTRUCTIONS_PATH:
-            read_instructions(repo, mode, oid, docs)
+        if path == instructions:
+            read_instructions(repo, path, mode, oid, docs)
             continue
         if not matches(path, patterns):
             continue
@@ -80,13 +101,13 @@ def tracked_files(repo: Path, commit: str) -> list[tuple[str, str, str]]:
     return sorted(files)
 
 
-def read_instructions(repo: Path, mode: str, oid: str, docs: Documentation) -> None:
+def read_instructions(repo: Path, path: str, mode: str, oid: str, docs: Documentation) -> None:
     if mode not in REGULAR_FILE_MODES:
-        docs.skip(INSTRUCTIONS_PATH, "Not a regular file")
+        docs.skip(path, "Not a regular file")
         return
     text = git(repo, "cat-file", "blob", oid).decode("utf-8", errors="replace").strip()
     if len(text) > MAX_INSTRUCTIONS_CHARS:
-        docs.skip(INSTRUCTIONS_PATH, f"Review instructions exceed {MAX_INSTRUCTIONS_CHARS} characters")
+        docs.skip(path, f"Review instructions exceed {MAX_INSTRUCTIONS_CHARS} characters")
         return
     docs.instructions = text
 

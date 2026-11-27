@@ -3,7 +3,7 @@ import logging
 import os
 from pathlib import Path
 
-from .documents import DEFAULT_PATTERNS
+from .documents import DEFAULT_DOCS_DIR, default_patterns, instructions_path, normalize_repo_path
 from .errors import ReviewerError
 from .github import GitHub, publish
 from .levels import DEFAULT_LEVEL, LEVELS
@@ -19,7 +19,8 @@ def main(argv: list[str] | None = None) -> int:
     configure_logging()
     github = github_from_env() if args.github_pr else None
     report = run_review(args.repo, args.base, args.head, args.project_id,
-                        args.doc_patterns or DEFAULT_PATTERNS, LEVELS[args.level], args.env_file)
+                        args.doc_patterns or default_patterns(args.docs_dir), LEVELS[args.level],
+                        args.env_file, args.instructions_path)
     exit_code = 1 if should_fail(report, args.fail_on) else 0
     if github:
         try:
@@ -37,6 +38,12 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--base", required=True, help="Target branch or commit")
     parser.add_argument("--head", required=True, help="Changed branch or commit")
     parser.add_argument("--project-id", required=True)
+    parser.add_argument("--docs-dir", default=DEFAULT_DOCS_DIR,
+                        help="Documentation directory ('.' for the root); sets the default globs "
+                             "and the review instructions path")
+    parser.add_argument("--instructions-path",
+                        help="Review instructions file, read from the merge-base commit "
+                             "(default <docs-dir>/review_instructions.md)")
     parser.add_argument("--doc-pattern", dest="doc_patterns", action="append",
                         help="Documentation glob; repeat to replace the defaults")
     parser.add_argument("--level", choices=LEVELS, default=DEFAULT_LEVEL,
@@ -48,6 +55,19 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     args = parser.parse_args(argv)
     if not args.project_id.strip() or len(args.project_id) > 128:
         parser.error("--project-id must contain 1-128 characters")
+    try:
+        args.docs_dir = normalize_repo_path(args.docs_dir)
+    except ReviewerError as error:
+        parser.error(f"--docs-dir {error}")
+    if args.instructions_path is None or not args.instructions_path.strip():
+        args.instructions_path = instructions_path(args.docs_dir)
+    else:
+        try:
+            args.instructions_path = normalize_repo_path(args.instructions_path)
+        except ReviewerError as error:
+            parser.error(f"--instructions-path {error}")
+        if not args.instructions_path:
+            parser.error("--instructions-path must name a file")
     return args
 
 
